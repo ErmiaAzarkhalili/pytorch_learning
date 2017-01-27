@@ -1,3 +1,7 @@
+# This is a PyTorch version of [lstm_text_generation.py](https://github.com/fchollet/keras/blob/master/examples/lstm_text_generation.py)
+# in keras example using GRU instead of LSTM.
+
+
 import random
 import numpy as np
 import torch
@@ -109,10 +113,10 @@ def train():
     print("\r{}".format(loss.data[0]), end="")
 
 
-def test(X, hidden):
+def test(x, hidden):
     model.eval()
     model.zero_grad()
-    output, hidden = model(X, var(hidden.data))
+    output, hidden = model(x, var(hidden.data))
     return output, hidden
 
 
@@ -128,7 +132,7 @@ def main():
         print(sentence + "---")
         hidden = model.init_hidden(1)
 
-        for i in range(40):
+        for i in range(400):
             x = np.zeros((maxlen, 1, len(chars)))
             for t, char in enumerate(sentence):
                 x[t, 0, char_indices[char]] = 1
