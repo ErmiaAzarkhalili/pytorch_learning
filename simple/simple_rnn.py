@@ -1,56 +1,67 @@
-import random
-
+import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
+import math
+import random
 
 import torch
 import torch.nn as nn
 from torch.autograd import Variable
 
 # variables
+features = 1
 seq_len = 10
+hidden_size = 128
 batch_size = 32
 
-def data_generator(length, batch_size, test_size=3):
-    epsilon = 1e-4
-    def e_cos(x):
-            return np.exp(-np.cos(x))
+def data_generator():
+    pass
 
 
-    while True:
-        train_c, test_c = 0, 0
-        train_X, train_Y = np.zeros((batch_size, length)), []
-        test_X, test_Y = np.zeros((test_size, length)), []
-        test_ids = random.sample(range(batch_size + test_size), test_size)
-        for i in range(batch_size + test_size):
-            if i not in test_ids:
-                tmp = np.arange(i * epsilon, (i + length) * epsilon, epsilon)
-                print(len(tmp))
-                train_X[train_c] = e_cos(tmp)
-                train_Y.append(e_cos((i + length) * epsilon))
-                train_c += 1
-            else:
-                tmp = np.arange(i * epsilon, (i + length) * epsilon, epsilon)
-                test_X[test_c] = e_cos(tmp)
-                test_Y.append(e_cos((i + length) * epsilon))
-                test_c += 1
-
-        yield train_X, np.array(train_Y), test_X, np.array(test_Y)
+def var(array):
+    array = torch.Tensor(array)
+    return Variable(array).cuda()
 
 
 class Net(nn.Module):
     def __init__(self):
         super(Net, self).__init__()
-        self.rnn1 = nn.GRU(input_size=seq_len,
-                            hidden_size=128,
+        self.rnn1 = nn.GRU(input_size=features,
+                            hidden_size=hidden_size,
                             num_layers=1)
-        self.dense1 = nn.Linear(128, 1)
+        self.dense1 = nn.Linear(hidden_size, 1)
 
     def forward(self, x, hidden):
         x, hidden = self.rnn1(x, hidden)
+        x = x.select(0, seq_len-1).contiguous()
+        x = x.view(-1, hidden_size)
         x = self.dense1(x)
         return x, hidden
 
-    def init_hidden(self, batch_size):
+    def init_hidden(self):
         weight = next(self.parameters()).data
-        return Variable(weight.new(128, batch_size, 1).zero_())
+        return Variable(weight.new(1, batch_size, hidden_size).zero_())
+
+
+(X_train, y_train), (X_test, y_test) = data_generator()
+
+model = Net()
+model.cuda()
+criterion = nn.MSELoss()
+optimizer = torch.optim.Adam(model.parameters())
+
+
+def train():
+    model.train()
+    total_loss = 0
+    hidden = model.init_hidden()
+    for epoch in range(len(X_train)//batch_size):
+        X = var(X_train[epoch*batch_size: (epoch+1)*batch_size]
+                        .reshape(seq_len, batch_size, features))
+        y = var(y_train[epoch*batch_size: (epoch+1)*batch_size]
+                        .reshape(-1, batch_size, features))
+        model.zero_grad()
+        output, hidden = model(X, Variable(hidden.data))
+        loss = criterion(output, y)
+        total_loss += loss.data
+        loss.backward()
+        optimizer.step()
