@@ -10,8 +10,6 @@ from torch.autograd import Variable
 file_name = "1984.txt"
 maxlen = 30
 step = 3
-# features = 1
-seq_len = 30
 hidden_size = 32
 batch_size = 16
 
@@ -21,12 +19,14 @@ if torch.cuda.is_available():
     cuda = True
 
 # functions
-def var(X):
-    X = Variable(X)
+
+
+def var(x):
+    x = Variable(x)
     if cuda:
-        return X.cuda()
+        return x.cuda()
     else:
-        return X
+        return x
 
 
 def sample(preds, temperature=1.0):
@@ -49,7 +49,7 @@ class Net(nn.Module):
 
     def forward(self, x, hidden):
         x, hidden = self.rnn1(x, hidden)
-        x = x.select(0, seq_len-1).contiguous()
+        x = x.select(0, maxlen-1).contiguous()
         x = x.view(-1, hidden_size)
         x = F.softmax(self.dense1(x))
         return x, hidden
@@ -101,9 +101,6 @@ def train():
     for epoch in range(len(sentences) // batch_size):
         X_batch = var(torch.FloatTensor(X[:, epoch*batch_size: (epoch+1)*batch_size, :]))
         y_batch = var(torch.LongTensor(y[epoch*batch_size: (epoch+1)*batch_size]))
-        # if cuda:
-        #     X_batch, y_batch = X_batch.cuda(), y_batch.cuda()
-
         model.zero_grad()
         output, hidden = model(X_batch, var(hidden.data))
         loss = criterion(output, y_batch)
@@ -119,27 +116,32 @@ def test(X, hidden):
     return output, hidden
 
 
-for epoch in range(1, 60):
-    train()
-    print("\n---")
+def main():
+    for epoch in range(1, 60):
+        train()
+        print("\n---")
 
-    start_index = random.randint(0, len(raw_text) - maxlen - 1)
-    generated = ''
-    sentence = raw_text[start_index: start_index + maxlen]
-    generated += sentence
-    print(sentence + "---")
-    hidden = model.init_hidden(1)
+        start_index = random.randint(0, len(raw_text) - maxlen - 1)
+        generated = ''
+        sentence = raw_text[start_index: start_index + maxlen]
+        generated += sentence
+        print(sentence + "---")
+        hidden = model.init_hidden(1)
 
-    for i in range(40):
-        x = np.zeros((maxlen, 1, len(chars)))
-        for t, char in enumerate(sentence):
-            x[t, 0, char_indices[char]] = 1
-        x = var(torch.FloatTensor(x))
-        pred, hidden = test(x, hidden)
-        next_idx = sample(pred.data, 1.0)
-        next_idx = int(next_idx[1].sum())
-        next_char = indices_char[next_idx]
-        generated += next_char
-        sentence = sentence[1:] + next_char
-        print(next_char, end="")
-    print()
+        for i in range(40):
+            x = np.zeros((maxlen, 1, len(chars)))
+            for t, char in enumerate(sentence):
+                x[t, 0, char_indices[char]] = 1
+            x = var(torch.FloatTensor(x))
+            pred, hidden = test(x, hidden)
+            next_idx = sample(pred.data, 1.0)
+            next_idx = int(next_idx[1].sum())
+            next_char = indices_char[next_idx]
+            generated += next_char
+            sentence = sentence[1:] + next_char
+            print(next_char, end="")
+        print()
+
+
+if __name__ == '__main__':
+    main()
