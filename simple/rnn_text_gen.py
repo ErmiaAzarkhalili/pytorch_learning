@@ -1,7 +1,6 @@
 # This is a PyTorch version of [lstm_text_generation.py](https://github.com/fchollet/keras/blob/master/examples/lstm_text_generation.py)
 # in keras example using GRU instead of LSTM.
 
-
 import random
 import numpy as np
 import torch
@@ -12,7 +11,7 @@ from torch.autograd import Variable
 
 # variables
 file_name = "1984.txt"
-maxlen = 30
+maxlen = 50
 step = 3
 hidden_size = 32
 batch_size = 16
@@ -33,14 +32,14 @@ def var(x):
         return x
 
 
-def sample(preds, temperature=1.0):
+def sample(preds, size, temperature=1.0):
     # helper function to sample an index from a probability array
     preds = preds.cpu()
     preds = torch.log(preds)/temperature
     exp_preds = torch.exp(preds)
     preds = exp_preds / torch.sum(exp_preds)
-    # probas = torch.multinomial(preds, 1)
-    return torch.max(preds, 0)
+    probas = torch.multinomial(preds, size)
+    return torch.max(probas, 0)
 
 
 class Net(nn.Module):
@@ -96,7 +95,7 @@ model = Net(features=features, cls_size=len(chars))
 if cuda:
     model.cuda()
 criterion = nn.CrossEntropyLoss()
-optimizer = optim.Adam(model.parameters())
+optimizer = optim.Adam(model.parameters(), lr=7e-4)
 
 
 def train():
@@ -122,6 +121,7 @@ def test(x, hidden):
 
 def main():
     for epoch in range(1, 60):
+        print("epoch: {}".format(epoch))
         train()
         print("\n---")
 
@@ -138,7 +138,7 @@ def main():
                 x[t, 0, char_indices[char]] = 1
             x = var(torch.FloatTensor(x))
             pred, hidden = test(x, hidden)
-            next_idx = sample(pred.data, 1.0)
+            next_idx = sample(pred.data, features, 1.2)
             next_idx = int(next_idx[1].sum())
             next_char = indices_char[next_idx]
             generated += next_char
