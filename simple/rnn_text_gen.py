@@ -13,7 +13,7 @@ from torch.autograd import Variable
 file_name = "1984.txt"
 maxlen = 50
 step = 3
-hidden_size = 32
+hidden_size = 256
 batch_size = 16
 
 # cuda setting
@@ -39,7 +39,7 @@ def sample(preds, size, temperature=1.0):
     exp_preds = torch.exp(preds)
     preds = exp_preds / torch.sum(exp_preds)
     probas = torch.multinomial(preds, size)
-    return torch.max(probas, 0)
+    return torch.max(probas, 1)
 
 
 class Net(nn.Module):
@@ -120,6 +120,9 @@ def test(x, hidden):
 
 
 def main():
+    for epoch in range(0, 30):
+        train()
+
     for epoch in range(1, 60):
         print("epoch: {}".format(epoch))
         train()
