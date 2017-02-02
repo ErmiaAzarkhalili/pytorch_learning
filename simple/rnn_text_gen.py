@@ -32,29 +32,21 @@ def var(x):
         return x
 
 
-def sample(preds, size, temperature=1.0):
-    # helper function to sample an index from a probability array
-    preds = preds.cpu()
-    preds = torch.log(preds)/temperature
-    exp_preds = torch.exp(preds)
-    preds = exp_preds / torch.sum(exp_preds)
-    probas = torch.multinomial(preds, size)
-    return torch.max(probas, 1)
-
-
 class Net(nn.Module):
     def __init__(self, features, cls_size):
         super(Net, self).__init__()
         self.rnn1 = nn.GRU(input_size=features,
                             hidden_size=hidden_size,
                             num_layers=1)
-        self.dense1 = nn.Linear(hidden_size, cls_size)
+        self.dense1 = nn.Linear(hidden_size, hidden_size)
+        self.dense2 = nn.Linear(hidden_size, cls_size)
 
     def forward(self, x, hidden):
         x, hidden = self.rnn1(x, hidden)
         x = x.select(0, maxlen-1).contiguous()
         x = x.view(-1, hidden_size)
-        x = F.softmax(self.dense1(x))
+        x = F.relu(self.dense1(x))
+        x = F.log_softmax(self.dense2(x))
         return x, hidden
 
     def init_hidden(self, batch_size=batch_size):
@@ -87,14 +79,13 @@ for i, sentence in enumerate(sentences):
     for t, char in enumerate(sentence):
         X[t, i, char_indices[char]] = 1
     y[i] = char_indices[next_chars[i]]
-
 features = len(chars)
 
 print("Building the Model")
 model = Net(features=features, cls_size=len(chars))
 if cuda:
     model.cuda()
-criterion = nn.CrossEntropyLoss()
+criterion = nn.NLLLoss()
 optimizer = optim.Adam(model.parameters(), lr=7e-4)
 
 
@@ -124,25 +115,25 @@ def main():
         train()
 
     for epoch in range(1, 60):
-        print("epoch: {}".format(epoch))
+
         train()
-        print("\n---")
+        print("\n---\nepoch: {}".format(epoch))
 
         start_index = random.randint(0, len(raw_text) - maxlen - 1)
         generated = ''
         sentence = raw_text[start_index: start_index + maxlen]
         generated += sentence
-        print(sentence + "---")
-        hidden = model.init_hidden(1)
+        print(sentence + "\n---")
 
         for i in range(400):
+            hidden = model.init_hidden(1)
             x = np.zeros((maxlen, 1, len(chars)))
             for t, char in enumerate(sentence):
                 x[t, 0, char_indices[char]] = 1
             x = var(torch.FloatTensor(x))
             pred, hidden = test(x, hidden)
-            next_idx = sample(pred.data, features, 1.2)
-            next_idx = int(next_idx[1].sum())
+            next_idx = torch.max(pred, 1)
+            next_idx = int(next_idx[1].data.sum())
             next_char = indices_char[next_idx]
             generated += next_char
             sentence = sentence[1:] + next_char
