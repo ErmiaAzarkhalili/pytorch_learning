@@ -1,5 +1,6 @@
 import numpy as np
 
+
 def seq_generator(file_name, maxlen, step):
 
     with open(file_name) as f:
@@ -9,8 +10,8 @@ def seq_generator(file_name, maxlen, step):
     chars = sorted(list(set(raw_text)))
     print("corpus has {} chars".format(len(chars)))
 
-    char_indices = {'<UNK>': 0}
-    indices_char = {0: '<UNK>'}
+    char_indices = {'☃': 0}
+    indices_char = {0: '☃'}
     word_count = {}
     for w in raw_text:
         if w in word_count:
@@ -20,7 +21,7 @@ def seq_generator(file_name, maxlen, step):
 
     counter = 1
     for c in chars:
-        if word_count[c] > 3:
+        if word_count[c] > 1:
             char_indices[c] = counter
             indices_char[counter] = c
             counter += 1
@@ -41,14 +42,5 @@ def seq_generator(file_name, maxlen, step):
         y[i] = char_indices.get(next_chars[i], 0)
     features = len(chars)
 
-    return raw_text, char_indices, indices_char, features
+    return raw_text, sentences, char_indices, indices_char, features, X, y
 
-
-if __name__ == '__main__':
-    raw_text, char_indices, indices_char, features = \
-        seq_generator("seq_generator.py", 10, 2)
-
-    print("raw_text {}".format(raw_text))
-    print("char_indices {}".format(char_indices))
-    print("indices_char {}".format(indices_char))
-    print("feature {}".format(features))

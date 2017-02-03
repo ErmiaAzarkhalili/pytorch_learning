@@ -14,7 +14,7 @@ import seq_generator
 file_name = "neko.txt"
 maxlen = 50
 step = 3
-hidden_size = 256
+hidden_size = 512
 batch_size = 16
 num_layers = 2
 emb_dim = 20
@@ -69,34 +69,20 @@ class Net(nn.Module):
         return hidden, hidden
 
 # ---
-raw_text = ""
-with open(file_name) as f:
-    raw_text = f.read().lower()
-print("corpus size: {}".format(len(raw_text)))
+raw_text, sentences, char_indices, indices_char, features, X, y = \
+    seq_generator.seq_generator(file_name, maxlen, step)
 
-chars = sorted(list(set(raw_text)))
-print("corpus has {} chars".format(len(chars)))
-char_indices = dict((c, i) for i, c in enumerate(chars))
-indices_char = dict((i, c) for i, c in enumerate(chars))
-
-sentences = []
-next_chars = []
-for i in range(0, len(raw_text) - maxlen, step):
-    sentences.append(raw_text[i: i + maxlen])
-    next_chars.append(raw_text[i + maxlen])
-print('nb sequences:', len(sentences))
-
-print('Vectorization...')
-X = np.zeros((maxlen, len(sentences)), dtype=np.int)
-y = np.zeros((len(sentences)), dtype=np.int)
-for i, sentence in enumerate(sentences):
-    for t, char in enumerate(sentence):
-        X[t, i] = char_indices[char]
-    y[i] = char_indices[next_chars[i]]
-features = len(chars)
+char_dict = {"raw_text": raw_text,
+             "sentences": sentences,
+             "char_indices": char_indices,
+             "indices_char": indices_char,
+             "features": features,
+             "X": X,
+             "y": y}
+torch.save(char_dict, file_name + ".chardict")
 
 print("Building the Model")
-model = Net(features=features, cls_size=len(chars))
+model = Net(features=features, cls_size=features)
 if cuda:
     model.cuda()
 criterion = nn.NLLLoss()
@@ -117,43 +103,10 @@ def train():
     print("\r{}".format(loss.data[0]), end="")
 
 
-def test(x, hidden):
-    model.eval()
-    model.zero_grad()
-    output, hidden = model(x, var_pair(hidden))
-    return output, hidden
-
-
 def main():
-    for epoch in range(0, 30):
+    for epoch in range(0, 40):
         train()
-
-    for epoch in range(1, 60):
-
-        train()
-        print("\n---\nepoch: {}".format(epoch))
-
-        start_index = random.randint(0, len(raw_text) - maxlen - 1)
-        generated = ''
-        sentence = raw_text[start_index: start_index + maxlen]
-        generated += sentence
-        print(sentence + "\n---")
-
-        for i in range(400):
-            hidden = model.init_hidden(1)
-            x = np.zeros((maxlen, 1), dtype=np.int)
-            for t, char in enumerate(sentence):
-                x[t, 0] = char_indices[char]
-            x = var(torch.LongTensor(x))
-            pred, hidden = test(x, hidden)
-            next_idx = torch.max(pred, 1)
-            next_idx = int(next_idx[1].data.sum())
-            next_char = indices_char[next_idx]
-            generated += next_char
-            sentence = sentence[1:] + next_char
-            print(next_char, end="")
-        print()
-
 
 if __name__ == '__main__':
     main()
+    torch.save(model, file_name + ".rnn.mdl")
