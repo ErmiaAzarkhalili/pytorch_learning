@@ -1,6 +1,3 @@
-# This is a PyTorch version of [lstm_text_generation.py](https://github.com/fchollet/keras/blob/master/examples/lstm_text_generation.py)
-# in keras example using GRU instead of LSTM.
-
 import random
 import numpy as np
 import torch

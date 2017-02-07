@@ -1,6 +1,3 @@
-# This is a PyTorch version of [lstm_text_generation.py](https://github.com/fchollet/keras/blob/master/examples/lstm_text_generation.py)
-# in keras example using GRU instead of LSTM.
-
 import random
 import numpy as np
 import torch
@@ -8,7 +5,6 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
 from torch.autograd import Variable
-import seq_generator
 
 # variables
 file_name = "neko.txt"
