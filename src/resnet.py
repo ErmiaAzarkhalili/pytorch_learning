@@ -7,8 +7,8 @@ from torch.autograd import Variable
 
 # cuda setting(s)
 cuda = False
-# if torch.cuda.is_available():
-#     cuda = True
+if torch.cuda.is_available():
+    cuda = True
 
 # variables
 batch_size = 128
@@ -27,20 +27,58 @@ test_loader = torch.utils.data.DataLoader(
     batch_size=batch_size, shuffle=True)
 
 
+class ResBase(nn.Module):
+    # basic element of res-net
+    def __init__(self, in_channels, out_channels, kernel_size=1, padding=0):
+        super(ResBase, self).__init__()
+        self.conv = nn.Conv2d(in_channels=in_channels,
+                              out_channels=out_channels,
+                              kernel_size=kernel_size,
+                              padding=padding)
+        self.bn = nn.BatchNorm2d(num_features=out_channels)
+
+    def forward(self, x):
+        return self.bn(self.conv(x))
+
+
+class ResBlock(nn.Module):
+    # basic block of res-net
+    def __init__(self, nb_filters, right=False):
+        super(ResBlock, self).__init__()
+        if len(nb_filters) != 4:
+            raise Exception("nb_filters size must be 3")
+        self.rb1 = ResBase(nb_filters[0], nb_filters[1])
+        self.rb2 = ResBase(nb_filters[1], nb_filters[2], kernel_size=3, padding=1)
+        self.rb3 = ResBase(nb_filters[2], nb_filters[3])
+        self.rbr = ResBase(nb_filters[0], nb_filters[3])
+        self.right = right
+
+    def forward(self, x):
+        # right: base or Nothing
+        # left: relu(base) -> relu(base) -> base
+        y = F.relu(self.rb1(x))
+        y = F.relu(self.rb2(y))
+        y = F.relu(self.rb3(y))
+        if self.right:
+            x = self.rbr(x)
+        return F.relu(x+y)
+
+
 class Net(nn.Module):
+    # the network of res-net
     def __init__(self):
         super(Net, self).__init__()
-        self.conv_1 = nn.Conv2d(3, 64, 4, stride=2)
+        self.conv_1 = nn.Conv2d(3, 32, 4, stride=2)
         self.bn_1 = nn.BatchNorm2d(64)
-        self.res_1 = self.__res_block(64, [32,32,128], True)
-        self.res_2 = self.__res_block(128, [32,32,128], False)
-        self.res_3 = self.__res_block(128, [32,32,128], False)
-        self.res_4 = self.__res_block(128, [64,64,256], True)
-        self.res_5 = self.__res_block(256, [64,64,256], False)
-        self.res_6 = self.__res_block(256, [128,128,256], False)
-        self.res_7 = self.__res_block(256, [128,128,512], True)
-        self.res_8 = self.__res_block(512, [128,128,512], False)
-        self.res_9 = self.__res_block(512, [256,256,512], False)
+        self.res_1 = ResBlock([32,32,32,128], True)
+        self.res_2 = ResBlock([128,32,32,128], False)
+        self.res_3 = ResBlock([128,32,32,128], False)
+        self.res_4 = ResBlock([128,64,64,256], True)
+        self.res_5 = ResBlock([256,64,64,256], False)
+        self.res_6 = ResBlock([256,128,128,256], False)
+        self.res_7 = ResBlock([256,128,128,512], True)
+        self.res_8 = ResBlock([512,128,128,512], False)
+        self.res_9 = ResBlock([512,256,256,512], False)
         self.avp_1 = nn.AvgPool2d(4, ceil_mode=True)
         self.dense = nn.Linear(2*2*512, 10)
 
@@ -61,34 +99,6 @@ class Net(nn.Module):
         x = self.dense(x.view(-1, 2*2*512))
         x = F.log_softmax(x)
         return x
-
-    def __res_block(self, in_channels,
-                    nb_filters, right=False):
-        def __res_base(_in_channels, out_channels,
-                       kernel_size=1, padding=0):
-            def g(x):
-                x = nn.Conv2d(in_channels=_in_channels,
-                              out_channels=out_channels,
-                              kernel_size=kernel_size,
-                              padding=padding)(x)
-                x = nn.BatchNorm2d(num_features=out_channels)(x)
-                return x
-            return g
-
-        # right: base or Nothing
-        # left: relu(base) -> relu(base) -> base
-        if len(nb_filters) != 3:
-            raise Exception("nb_filters size must be 3")
-
-        def f(x):
-            y = F.relu(__res_base(in_channels, nb_filters[0])(x))
-            y = F.relu(__res_base(nb_filters[0], nb_filters[1],
-                                  kernel_size=3, padding=1)(y))
-            y = F.relu(__res_base(nb_filters[1], nb_filters[2])(y))
-            if right is True:
-                x = __res_base(in_channels, nb_filters[2])(x)
-            return F.relu(x+y)
-        return f
 
 model = Net()
 if cuda:
