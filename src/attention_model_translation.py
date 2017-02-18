@@ -6,23 +6,25 @@ import unicodedata
 import re
 import random
 
-import numpy as np
 import torch
 import torch.nn as nn
 from torch.autograd import Variable
 from torch import optim
 import torch.nn.functional as F
 
+# variables
 MAX_LENGTH = 15
 EOS_CODE = "<EOS>"
 SOS_CODE = "<SOS>"
 file_path = "data/deu.txt"
 
+# cuda setting
 cuda = False
 if torch.cuda.is_available():
     cuda = True
 
 
+# convert tensor to variable
 def variable(t):
     t = Variable(t)
     if cuda:
@@ -47,7 +49,7 @@ def normalize_string(s):
 
 
 # get map char->idx, idx->char
-def map_generator(s, initial={"<SOS>": 0, "<EOS>": 1}):
+def map_generator(s, initial={SOS_CODE: 0, EOS_CODE: 1}):
     chars = sorted(list(set(s)))
     char_idx = dict((c, i) for i, c in enumerate(chars, len(initial)))
     char_idx.update(initial)
@@ -55,7 +57,7 @@ def map_generator(s, initial={"<SOS>": 0, "<EOS>": 1}):
     return char_idx, idx_char
 
 
-# read the data from text file
+# read data from the text file
 class DataGenerator(object):
     def var(self, list):
         # convert list to autograd.Variable
@@ -70,6 +72,13 @@ class DataGenerator(object):
         self.maxlen = maxlen
 
     def load(self, reverse=False, to_from=False, random_seed=None):
+        """
+        data iterator
+        :param reverse: reverse from_text, e.g. hello<EOS> -> olleh<EOS>
+        :param to_from: switch from_text and to_text
+        :param random_seed: seed of random state
+        :return:
+        """
         indices = [i for i in range(len(self.lines))]
         random.seed(random_seed)
         random.shuffle(indices)
@@ -216,7 +225,6 @@ def _test(input, encoder, decoder, data_gen, limit_len, max_len=MAX_LENGTH):
         d_output, d_hidden, d_attention = decoder(d_output, d_hidden, e_output, e_output_seq)
         d_output = torch.topk(d_output, 1)[1] # (max_val, max_idx_tensor)[1]
         _d_output = d_output.data.cpu()[0][0]
-        print(_d_output)
         d_output_list.append(_d_output)
         if _d_output == data_gen.char_idx[EOS_CODE]:
             break
@@ -231,9 +239,9 @@ def test(encoder, decoder, data_gen):
     input, _, question, answer = next(dl)
     prediction = _test(input, encoder, decoder, data_gen, 20)
     prediction = [data_gen.idx_char[i] for i in prediction]
-    print("question".format(question))
+    print("question {}".format(question))
     print("prediction {}".format("".join(prediction)))
-    print("answer".format(answer))
+    print("answer {}".format(answer))
     print("end test mode")
 
 
@@ -246,8 +254,10 @@ def main():
     if cuda:
         ecdr.cuda()
         dcdr.cuda()
-    train(ecdr, dcdr, 1, data_gen)
-    test(ecdr, dcdr, data_gen)
+    for i in range(10):
+        train(ecdr, dcdr, 1, data_gen)
+        test(ecdr, dcdr, data_gen)
+
 
 if __name__ == '__main__':
     main()
