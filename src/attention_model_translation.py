@@ -14,8 +14,8 @@ from torch import optim
 import torch.nn.functional as F
 
 MAX_LENGTH = 15
-EOS_CODE = "EOS"
-SOS_CODE = "SOS"
+EOS_CODE = "<EOS>"
+SOS_CODE = "<SOS>"
 file_path = "data/deu.txt"
 
 cuda = False
@@ -47,7 +47,7 @@ def normalize_string(s):
 
 
 # get map char->idx, idx->char
-def map_generator(s, initial={"SOS": 0, "EOS": 1}):
+def map_generator(s, initial={"<SOS>": 0, "<EOS>": 1}):
     chars = sorted(list(set(s)))
     char_idx = dict((c, i) for i, c in enumerate(chars, len(initial)))
     char_idx.update(initial)
@@ -215,8 +215,10 @@ def _test(input, encoder, decoder, data_gen, limit_len, max_len=MAX_LENGTH):
     for i in range(limit_len):
         d_output, d_hidden, d_attention = decoder(d_output, d_hidden, e_output, e_output_seq)
         d_output = torch.topk(d_output, 1)[1] # (max_val, max_idx_tensor)[1]
-        d_output_list.append(d_output[0][0])
-        if d_output[0] == data_gen.char_idx[EOS_CODE]:
+        _d_output = d_output.data.cpu()[0][0]
+        print(_d_output)
+        d_output_list.append(_d_output)
+        if _d_output == data_gen.char_idx[EOS_CODE]:
             break
 
     return d_output_list
