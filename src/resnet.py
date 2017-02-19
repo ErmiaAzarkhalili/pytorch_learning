@@ -69,7 +69,7 @@ class Net(nn.Module):
     def __init__(self):
         super(Net, self).__init__()
         self.conv_1 = nn.Conv2d(3, 32, 4, stride=2)
-        self.bn_1 = nn.BatchNorm2d(64)
+        self.bn_1 = nn.BatchNorm2d(32)
         self.res_stack = nn.Sequential(
             ResBlock([32,32,32,128], True),
             ResBlock([128,32,32,128], False),
