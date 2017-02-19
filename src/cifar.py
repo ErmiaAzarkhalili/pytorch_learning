@@ -56,8 +56,7 @@ model = Net()
 if cuda:
     model.cuda()
 
-optimizer = optim.Adam(model.parameters(),
-                       lr=1e-3)
+optimizer = optim.Adam(model.parameters(),lr=1e-3)
 
 
 def train(epoch):

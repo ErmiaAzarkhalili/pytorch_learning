@@ -5,6 +5,7 @@
 import unicodedata
 import re
 import random
+import argparse
 
 import torch
 import torch.nn as nn
@@ -12,11 +13,18 @@ from torch.autograd import Variable
 from torch import optim
 import torch.nn.functional as F
 
+
+parser = argparse.ArgumentParser(description="character-level attention-seq2seq")
+parser.add_argument("input", type=str)
+parser.add_argument("--nepochs", default=100, type=int)
+parser.add_argument("--maxlen", default=20, type=int)
+parser.add_argument("--trate", default=0.5, type=float)
+args = parser.parse_args()
 # variables
-MAX_LENGTH = 15
+MAX_LENGTH = args.maxlen
 EOS_CODE = "<EOS>"
 SOS_CODE = "<SOS>"
-file_path = "data/deu.txt"
+file_path = args.input
 
 # cuda setting
 cuda = False
@@ -44,7 +52,7 @@ def unicode_to_ascii(s):
 def normalize_string(s):
     s = unicode_to_ascii(s.lower().strip())
     s = re.sub(r"([.!?])", r" \1", s)
-    s = re.sub(r"[^a-zA-Z.!?\n\t]+", r" ", s)
+    s = re.sub(r"[^a-zA-Z.!?'\n\t]+", r" ", s)
     return s
 
 
@@ -63,21 +71,28 @@ class DataGenerator(object):
         # convert list to autograd.Variable
         return variable(torch.LongTensor(list).view(-1, 1))
 
-    def __init__(self, file_path, maxlen=MAX_LENGTH):
+    def __init__(self, file_path, maxlen=MAX_LENGTH, reverse=False, to_from=False):
+        """
+
+        :param file_path: path to the input file
+        :param maxlen: max length
+        :param reverse: reverse from_text, e.g. hello<EOS> -> olleh<EOS>
+        :param to_from: switch from_text and to_text
+        """
         with open(file_path) as f:
             lines = f.read()
         lines = normalize_string(lines)
         self.char_idx, self.idx_char = map_generator(lines)
         self.lines = lines.split("\n")
         self.maxlen = maxlen
+        self.reverse = reverse
+        self.to_from = to_from
 
-    def load(self, reverse=False, to_from=False, random_seed=None):
+    def load(self, random_seed=None):
         """
         data iterator
-        :param reverse: reverse from_text, e.g. hello<EOS> -> olleh<EOS>
-        :param to_from: switch from_text and to_text
         :param random_seed: seed of random state
-        :return:
+        :return: from_tensor, to_tensor, from_text, to_text
         """
         indices = [i for i in range(len(self.lines))]
         random.seed(random_seed)
@@ -88,12 +103,12 @@ class DataGenerator(object):
             _from_text, _to_text = _pair.split("\t")
             if len(_from_text) < self.maxlen:
                 _from = [self.char_idx[w] for w in _from_text]
-                if reverse:
+                if self.reverse:
                     _from.reverse()
                 _to = [self.char_idx[w] for w in _to_text]
                 _from.append(self.char_idx[EOS_CODE])
                 _to.append(self.char_idx[EOS_CODE])
-                if to_from:
+                if self.to_from:
                     # to_lang -> from_lang
                     __from = [self.char_idx[SOS_CODE]]
                     __from.extend(_from)
@@ -155,8 +170,8 @@ class AttentionDecoder(nn.Module):
         return variable(torch.zeros(self.n_layers, 1, self.hidden_size))
 
 
-def _train(input, target, encoder, decoder, e_opt, d_opt,
-           criterion, data_gen, max_len=MAX_LENGTH, teacher_rate=0.5):
+def _train(input, target, encoder, decoder, e_opt, d_opt, criterion,
+           data_gen, max_len=MAX_LENGTH, teacher_rate=0.5):
     encoder.train()
     decoder.train()
     e_hidden = encoder.init_hidden()
@@ -189,34 +204,32 @@ def _train(input, target, encoder, decoder, e_opt, d_opt,
     loss.backward()
     e_opt.step()
     d_opt.step()
-    return loss.data[0]/t_length
+    return loss.data[0] / t_length
 
 
-def train(encoder, decoder, n_epochs, data_gen, e_lr=1e-3, d_lr=1e-3):
+def train(encoder, decoder, n_epochs, data_gen, e_lr=1e-3, d_lr=1e-3, teacher_rate=0.5):
     e_opt = optim.Adam(encoder.parameters(), lr=e_lr)
     d_opt = optim.Adam(decoder.parameters(), lr=d_lr)
     criterion = nn.NLLLoss()
     total_loss = 0
     loss_list = []
-    print("start training")
-    for epoch in range(1, n_epochs+1):
+    for epoch in range(1, n_epochs + 1):
         dl = data_gen.load()
         counter = 0
-        for input, target,_,_ in dl:
-            loss = _train(input, target, encoder, decoder, e_opt, d_opt, criterion, data_gen)
+        for input, target, _, _ in dl:
+            loss = _train(input, target, encoder, decoder, e_opt, d_opt, criterion, data_gen, teacher_rate=teacher_rate)
             total_loss += loss
             loss_list.append(total_loss)
             if counter % 100 == 0:
                 print("\rpartial loss{:>10.2}".format(loss), end="")
             counter += 1
-        print("\nepoch {:>5},data size{:>7} pairs: loss {:>7.2}".format(epoch, counter, total_loss))
+        print("\nepoch {:>5}, data size{:>7} pairs: loss {:>7.2}".format(epoch, counter, total_loss))
         total_loss = 0
 
     return loss_list
 
 
 def _test(input, encoder, decoder, data_gen, limit_len, max_len=MAX_LENGTH):
-
     encoder.eval()
     decoder.eval()
     e_hidden = encoder.init_hidden()
@@ -230,7 +243,7 @@ def _test(input, encoder, decoder, data_gen, limit_len, max_len=MAX_LENGTH):
     d_output = data_gen.var([data_gen.char_idx[SOS_CODE]])
     for i in range(limit_len):
         d_output, d_hidden, d_attention = decoder(d_output, d_hidden, e_output, e_output_seq)
-        d_output = torch.topk(d_output, 1)[1] # (max_val, max_idx_tensor)[1]
+        d_output = torch.topk(d_output, 1)[1]  # (max_val, max_idx_tensor)[1]
         _d_output = d_output.data.cpu()[0][0]
         d_output_list.append(_d_output)
         if _d_output == data_gen.char_idx[EOS_CODE]:
@@ -238,14 +251,14 @@ def _test(input, encoder, decoder, data_gen, limit_len, max_len=MAX_LENGTH):
     return d_output_list
 
 
-def test(encoder, decoder, data_gen, limit_len=25):
-    print("-"*10)
+def test(encoder, decoder, data_gen, limit_len=MAX_LENGTH):
+    print("-" * 10)
     dl = data_gen.load()
     input, _, question, answer = next(dl)
     prediction = _test(input, encoder, decoder, data_gen, limit_len)
     prediction = [data_gen.idx_char[i] for i in prediction]
     print("question:{} {}/{}".format(question, "".join(prediction), answer))
-    print("-"*10)
+    print("-" * 10)
 
 
 def main():
@@ -257,9 +270,9 @@ def main():
     if cuda:
         ecdr.cuda()
         dcdr.cuda()
-    for i in range(10):
-        train(ecdr, dcdr, 1, data_gen)
-        test(ecdr, dcdr, data_gen)
+    for i in range(args.nepochs):
+        train(ecdr, dcdr, 1, data_gen, teacher_rate=args.trate)
+        test(ecdr, dcdr, data_gen, MAX_LENGTH+10)
 
 
 if __name__ == '__main__':
