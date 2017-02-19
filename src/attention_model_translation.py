@@ -156,12 +156,13 @@ class AttentionDecoder(nn.Module):
 
 
 def _train(input, target, encoder, decoder, e_opt, d_opt,
-           criterion, max_len=MAX_LENGTH):
+           criterion, data_gen, max_len=MAX_LENGTH, teacher_rate=0.5):
     encoder.train()
     decoder.train()
     e_hidden = encoder.init_hidden()
     e_opt.zero_grad()
     d_opt.zero_grad()
+    train_target_ratio = random.uniform(0, 1)
 
     i_length = input.size()[0]
     t_length = target.size()[0]
@@ -174,9 +175,16 @@ def _train(input, target, encoder, decoder, e_opt, d_opt,
 
     d_hidden = e_hidden
 
-    for i in range(t_length):
-        d_output, d_hidden, d_attention = decoder(target[i], d_hidden, e_output, e_output_seq)
-        loss += criterion(d_output[0], target[i])
+    if train_target_ratio < teacher_rate:
+        for i in range(t_length):
+            d_output, d_hidden, d_attention = decoder(target[i], d_hidden, e_output, e_output_seq)
+            loss += criterion(d_output[0], target[i])
+    else:
+        d_output = data_gen.var([data_gen.char_idx[SOS_CODE]])
+        for i in range(t_length):
+            d_output, d_hidden, d_attention = decoder(d_output, d_hidden, e_output, e_output_seq)
+            loss += criterion(d_output, target[i])
+            d_output = torch.topk(d_output, 1)[1]
 
     loss.backward()
     e_opt.step()
@@ -190,19 +198,18 @@ def train(encoder, decoder, n_epochs, data_gen, e_lr=1e-3, d_lr=1e-3):
     criterion = nn.NLLLoss()
     total_loss = 0
     loss_list = []
-
     print("start training")
     for epoch in range(1, n_epochs+1):
         dl = data_gen.load()
         counter = 0
         for input, target,_,_ in dl:
-            loss = _train(input, target, encoder, decoder, e_opt, d_opt, criterion)
+            loss = _train(input, target, encoder, decoder, e_opt, d_opt, criterion, data_gen)
             total_loss += loss
             loss_list.append(total_loss)
             if counter % 100 == 0:
                 print("\rpartial loss{:>10.2}".format(loss), end="")
             counter += 1
-        print("\nepoch {:>5}: loss {:.2}".format(epoch, total_loss))
+        print("\nepoch {:>5},data size{:>7} pairs: loss {:>7.2}".format(epoch, counter, total_loss))
         total_loss = 0
 
     return loss_list
@@ -228,21 +235,17 @@ def _test(input, encoder, decoder, data_gen, limit_len, max_len=MAX_LENGTH):
         d_output_list.append(_d_output)
         if _d_output == data_gen.char_idx[EOS_CODE]:
             break
-
     return d_output_list
 
 
-def test(encoder, decoder, data_gen):
-    print("start test mode")
-
+def test(encoder, decoder, data_gen, limit_len=25):
+    print("-"*10)
     dl = data_gen.load()
     input, _, question, answer = next(dl)
-    prediction = _test(input, encoder, decoder, data_gen, 20)
+    prediction = _test(input, encoder, decoder, data_gen, limit_len)
     prediction = [data_gen.idx_char[i] for i in prediction]
-    print("question {}".format(question))
-    print("prediction {}".format("".join(prediction)))
-    print("answer {}".format(answer))
-    print("end test mode")
+    print("question:{} {}/{}".format(question, "".join(prediction), answer))
+    print("-"*10)
 
 
 def main():
