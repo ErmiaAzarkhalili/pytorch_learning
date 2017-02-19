@@ -69,13 +69,13 @@ class Generator(nn.Module):
         self.gen = nn.Sequential(
             nn.ConvTranspose2d(g_input_size, 256, 4, bias=False),
             nn.BatchNorm2d(256),
-            nn.ReLU(),
+            nn.ReLU(inplace=True),
             nn.ConvTranspose2d(256, 128, 4, stride=2, padding=1, bias=False),
             nn.BatchNorm2d(128),
-            nn.ReLU(),
+            nn.ReLU(inplace=True),
             nn.ConvTranspose2d(128, 64, 4, stride=2, padding=1, bias=False),
             nn.BatchNorm2d(64),
-            nn.ReLU(),
+            nn.ReLU(inplace=True),
             nn.ConvTranspose2d(64, 3, 4, stride=2, padding=1, bias=False),
             nn.Tanh()
         )
@@ -92,13 +92,13 @@ class Critic(nn.Module):
         super(Critic, self).__init__()
         self.crtc = nn.Sequential(
             nn.Conv2d(3, 64, 4, stride=2, padding=1, bias=False),
-            nn.LeakyReLU(0.2),
+            nn.LeakyReLU(0.2, inplace=True),
             nn.Conv2d(64, 128, 4, stride=2, padding=1, bias=False),
             nn.BatchNorm2d(128),
-            nn.LeakyReLU(0.2),
+            nn.LeakyReLU(0.2, inplace=True),
             nn.Conv2d(128, 256, 4, stride=2, padding=1, bias=False),
             nn.BatchNorm2d(256),
-            nn.LeakyReLU(0.2),
+            nn.LeakyReLU(0.2, inplace=True),
             nn.Conv2d(256, 1, 4, stride=1, padding=0, bias=False)
         )
 
@@ -173,8 +173,8 @@ def train(generator, critic, g_opt, c_opt, gan_name, n_epochs=args.n_epochs):
             for _ in range(5):
                 c_err, fake, _ = train_critic(label, g_input, data)
             g_err, _ = train_generator(label, fake)
-            g_err_total += g_err/n_epochs
-            c_err_total += c_err/n_epochs
+            g_err_total += g_err.data[0]/n_epochs
+            c_err_total += c_err.data[0]/n_epochs
 
             if b_idx % 100 == 0:
                 print('\r[{:>4}/{:>4}][{:>4}/{:>4}] Loss_C: {:>10.2} Loss_G: {:>10.2}'
@@ -195,7 +195,7 @@ def plot(g_err, c_err):
     plt.plot(g_err)
     plt.plot(c_err)
     plt.legend(["g_err", "c_err"])
-    plt.savefig("gan_losses.png")
+    plt.savefig("{}/gan_losses.png".format(output_path))
 
 def main():
     generator = Generator()
