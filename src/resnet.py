@@ -70,15 +70,16 @@ class Net(nn.Module):
         super(Net, self).__init__()
         self.conv_1 = nn.Conv2d(3, 32, 4, stride=2)
         self.bn_1 = nn.BatchNorm2d(64)
-        self.res_1 = ResBlock([32,32,32,128], True)
-        self.res_2 = ResBlock([128,32,32,128], False)
-        self.res_3 = ResBlock([128,32,32,128], False)
-        self.res_4 = ResBlock([128,64,64,256], True)
-        self.res_5 = ResBlock([256,64,64,256], False)
-        self.res_6 = ResBlock([256,128,128,256], False)
-        self.res_7 = ResBlock([256,128,128,512], True)
-        self.res_8 = ResBlock([512,128,128,512], False)
-        self.res_9 = ResBlock([512,256,256,512], False)
+        self.res_stack = nn.Sequential(
+            ResBlock([32,32,32,128], True),
+            ResBlock([128,32,32,128], False),
+            ResBlock([128,32,32,128], False),
+            ResBlock([128,64,64,256], True),
+            ResBlock([256,64,64,256], False),
+            ResBlock([256,128,128,256], False),
+            ResBlock([256,128,128,512], True),
+            ResBlock([512,128,128,512], False),
+            ResBlock([512,256,256,512], False))
         self.avp_1 = nn.AvgPool2d(4, ceil_mode=True)
         self.dense = nn.Linear(2*2*512, 10)
 
@@ -86,15 +87,7 @@ class Net(nn.Module):
         x = self.conv_1(x)
         x = F.relu(self.bn_1(x))
         x = F.max_pool2d(x, 2, 2)
-        x = self.res_1(x)
-        x = self.res_2(x)
-        x = self.res_3(x)
-        x = self.res_4(x)
-        x = self.res_5(x)
-        x = self.res_6(x)
-        x = self.res_7(x)
-        x = self.res_8(x)
-        x = self.res_9(x)
+        x = self.res_stack(x)
         x = self.avp_1(x)
         x = self.dense(x.view(-1, 2*2*512))
         x = F.log_softmax(x)
