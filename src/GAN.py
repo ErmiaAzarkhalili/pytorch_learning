@@ -23,8 +23,8 @@ parser.add_argument("type", choices=["WGAN", "DCGAN"], help="gan's type")
 parser.add_argument("--output_path", default="gan_output")
 parser.add_argument("--n_epochs", default=100, type=int, help="num of epochs")
 parser.add_argument("--bsize", default=32, type=int, help="mini batch size")
-parser.add_argument("--g_lr", default=1e-3, type=float, help="learning rate of generator")
-parser.add_argument("--c_lr", default=1e-3, type=float, help="learning rate of critic")
+parser.add_argument("--g_lr", default=2e-4, type=float, help="learning rate for generator")
+parser.add_argument("--c_lr", default=2e-4, type=float, help="learning rate for critic")
 parser.add_argument("--zsize", default=32, type=int)
 args = parser.parse_args()
 
@@ -129,9 +129,9 @@ def train(generator, critic, g_opt, c_opt, gan_name, n_epochs=args.n_epochs):
 
         # train with fake
         g_input.data.normal_()
-        generator.eval()
+        # generator.eval()
         fake = generator(g_input)
-        generator.train()
+        # generator.train()
         label.data.fill_(0)
         output = critic(fake.detach())
         if gan_name == "WGAN":
@@ -150,9 +150,9 @@ def train(generator, critic, g_opt, c_opt, gan_name, n_epochs=args.n_epochs):
         # update generator
         generator.zero_grad()
         label.data.fill_(1)
-        critic.eval()
+        # critic.eval()
         output = critic(fake)
-        critic.train()
+        # critic.train()
         if gan_name == "WGAN":
             g_err = output.mean(0).view(1)
             g_err.backward(one)
@@ -180,8 +180,9 @@ def train(generator, critic, g_opt, c_opt, gan_name, n_epochs=args.n_epochs):
                 print('\r[{:>4}/{:>4}][{:>4}/{:>4}] Loss_C: {:>10.2} Loss_G: {:>10.2}'
                       .format(epoch+1, n_epochs, b_idx, len(data_loader),
                               c_err.data[0], g_err.data[0]), end="")
-
+        generator.eval()
         fake = generator(fixed_g_input)
+        generator.train()
         vutils.save_image(fake.data,
                           '{}/fake_samples_epoch_{}.png'.format(output_path, epoch))
         g_err_list.append(g_err_total)
@@ -191,6 +192,8 @@ def train(generator, critic, g_opt, c_opt, gan_name, n_epochs=args.n_epochs):
 
 
 def plot(g_err, c_err):
+    import matplotlib
+    matplotlib.use("AGG")
     import matplotlib.pyplot as plt
     plt.plot(g_err)
     plt.plot(c_err)
@@ -205,8 +208,8 @@ def main():
     if cuda:
         generator.cuda()
         critic.cuda()
-    g_opt = optim.Adam(generator.parameters(), lr=args.g_lr)
-    c_opt = optim.Adam(critic.parameters(), lr=args.c_lr)
+    g_opt = optim.Adam(generator.parameters(), lr=args.g_lr, betas=(0.5, 0.999))
+    c_opt = optim.Adam(critic.parameters(), lr=args.c_lr, betas=(0.5, 0.999))
     g_err, c_err = train(generator, critic, g_opt, c_opt, args.type)
     plot(g_err, c_err)
 

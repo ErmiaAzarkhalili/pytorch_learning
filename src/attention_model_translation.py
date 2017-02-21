@@ -19,6 +19,9 @@ parser.add_argument("input", type=str)
 parser.add_argument("--nepochs", default=100, type=int)
 parser.add_argument("--maxlen", default=20, type=int)
 parser.add_argument("--trate", default=0.5, type=float)
+parser.add_argument("--hidden", default=128, type=int)
+parser.add_argument("--e_lr", default=1e-3, type=float)
+parser.add_argument("--d_lr", default=1e-3, type=float)
 args = parser.parse_args()
 # variables
 MAX_LENGTH = args.maxlen
@@ -139,7 +142,7 @@ class Encoder(nn.Module):
 
 class AttentionDecoder(nn.Module):
     def __init__(self, hidden_size, output_size, n_layers=1,
-                 dropout_rate=0.1, max_len=MAX_LENGTH):
+                 dropout_rate=0.5, max_len=MAX_LENGTH):
         super(AttentionDecoder, self).__init__()
         self.hidden_size = hidden_size
         self.output_size = output_size
@@ -171,7 +174,7 @@ class AttentionDecoder(nn.Module):
 
 
 def _train(input, target, encoder, decoder, e_opt, d_opt, criterion,
-           data_gen, max_len=MAX_LENGTH, teacher_rate=0.5):
+           data_gen, max_len=MAX_LENGTH):
     encoder.train()
     decoder.train()
     e_hidden = encoder.init_hidden()
@@ -190,7 +193,7 @@ def _train(input, target, encoder, decoder, e_opt, d_opt, criterion,
 
     d_hidden = e_hidden
 
-    if train_target_ratio < teacher_rate:
+    if train_target_ratio < args.trate:
         for i in range(t_length):
             d_output, d_hidden, d_attention = decoder(target[i], d_hidden, e_output, e_output_seq)
             loss += criterion(d_output[0], target[i])
@@ -207,9 +210,9 @@ def _train(input, target, encoder, decoder, e_opt, d_opt, criterion,
     return loss.data[0] / t_length
 
 
-def train(encoder, decoder, n_epochs, data_gen, e_lr=1e-3, d_lr=1e-3, teacher_rate=0.5):
-    e_opt = optim.Adam(encoder.parameters(), lr=e_lr)
-    d_opt = optim.Adam(decoder.parameters(), lr=d_lr)
+def train(encoder, decoder, n_epochs, data_gen):
+    e_opt = optim.Adam(encoder.parameters(), lr=args.e_lr)
+    d_opt = optim.Adam(decoder.parameters(), lr=args.d_lr)
     criterion = nn.NLLLoss()
     total_loss = 0
     loss_list = []
@@ -217,7 +220,7 @@ def train(encoder, decoder, n_epochs, data_gen, e_lr=1e-3, d_lr=1e-3, teacher_ra
         dl = data_gen.load()
         counter = 0
         for input, target, _, _ in dl:
-            loss = _train(input, target, encoder, decoder, e_opt, d_opt, criterion, data_gen, teacher_rate=teacher_rate)
+            loss = _train(input, target, encoder, decoder, e_opt, d_opt, criterion, data_gen)
             total_loss += loss
             loss_list.append(total_loss)
             if counter % 100 == 0:
@@ -264,14 +267,14 @@ def test(encoder, decoder, data_gen, limit_len=MAX_LENGTH):
 def main():
     data_gen = DataGenerator(file_path)
     input_size = len(data_gen.idx_char)
-    hidden_size = 128
+    hidden_size = args.hidden
     ecdr = Encoder(input_size, hidden_size, n_layers=1)
     dcdr = AttentionDecoder(hidden_size, input_size, n_layers=1)
     if cuda:
         ecdr.cuda()
         dcdr.cuda()
     for i in range(args.nepochs):
-        train(ecdr, dcdr, 1, data_gen, teacher_rate=args.trate)
+        train(ecdr, dcdr, 1, data_gen)
         test(ecdr, dcdr, data_gen, MAX_LENGTH+10)
 
 
