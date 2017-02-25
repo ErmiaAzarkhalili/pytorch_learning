@@ -129,7 +129,7 @@ class Encoder(nn.Module):
         self.n_layers = n_layers
 
         self.emb = nn.Embedding(input_size, hidden_size)
-        self.gru = nn.GRU(hidden_size, hidden_size, num_layers=n_layers)
+        self.gru = nn.GRU(hidden_size, hidden_size, num_layers=n_layers,dropout=0.4)
 
     def forward(self, input, hidden):
         input = self.emb(input).view(1, 1, -1)
@@ -154,7 +154,7 @@ class AttentionDecoder(nn.Module):
         self.att = nn.Linear(hidden_size + output_size, max_len)
         self.att_combine = nn.Linear(hidden_size + output_size, hidden_size)
         self.dropout = nn.Dropout(dropout_rate)
-        self.gru = nn.GRU(hidden_size, hidden_size, num_layers=n_layers)
+        self.gru = nn.GRU(hidden_size, hidden_size, num_layers=n_layers, dropout=0.4)
         self.out = nn.Linear(hidden_size, output_size)
 
     def forward(self, input, hidden, e_output, e_output_seq):
@@ -186,7 +186,6 @@ def _train(input, target, encoder, decoder, e_opt, d_opt, criterion,
     t_length = target.size()[0]
     e_output_seq = variable(torch.zeros(max_len, encoder.hidden_size))
     loss = 0
-
     for i in range(i_length):
         e_output, e_hidden = encoder(input[i], e_hidden)
         e_output_seq[i] = e_output[0][0]
@@ -273,8 +272,10 @@ def main():
     if cuda:
         ecdr.cuda()
         dcdr.cuda()
-    for i in range(args.nepochs):
+    for i in range(1,args.nepochs+1):
+        print("--- epoch {}---".format(i))
         train(ecdr, dcdr, 1, data_gen)
+        test(ecdr, dcdr, data_gen, MAX_LENGTH+10)
         test(ecdr, dcdr, data_gen, MAX_LENGTH+10)
 
 
