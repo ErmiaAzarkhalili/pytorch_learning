@@ -15,8 +15,8 @@ if torch.cuda.is_available():
     cuda = True
 
 # args
-parser = argparse.ArgumentParser(description="DCGAN and W(DC)GAN")
-parser.add_argument("type", choices=["WGAN", "DCGAN"], help="gan's type")
+parser = argparse.ArgumentParser(description="DCGAN, W(DC)GAN, LSGAN")
+parser.add_argument("type", choices=["WGAN", "DCGAN", "LSGAN"], help="gan's type")
 parser.add_argument("input_path")
 parser.add_argument("--output_path", default="gan_output")
 parser.add_argument("--n_epochs", default=200, type=int, help="num of epochs")
@@ -122,6 +122,13 @@ def train(generator, critic, g_opt, c_opt, gan_name, n_epochs=args.n_epochs):
     if cuda:
         one = one.cuda()
 
+    def DC_LS(output, label, gan_name):
+        if gan_name == "DCGAN":
+            err = F.binary_cross_entropy(F.sigmoid(output), label)
+        else:
+            err = torch.norm(output-label, 2)
+        return err
+
     def train_critic(label, g_input, data):
         critic.zero_grad()
         # train with real
@@ -131,7 +138,7 @@ def train(generator, critic, g_opt, c_opt, gan_name, n_epochs=args.n_epochs):
             c_err_real = output.mean(0).view(1)
             c_err_real.backward(one)
         else:
-            c_err_real = F.binary_cross_entropy(F.sigmoid(output), label)
+            c_err_real = DC_LS(output, label, gan_name)
             c_err_real.backward()
         c_x = output.data.mean()
 
@@ -147,7 +154,7 @@ def train(generator, critic, g_opt, c_opt, gan_name, n_epochs=args.n_epochs):
             c_err_fake.backward(-1 * one)
             c_err = c_err_real - c_err_fake
         else:
-            c_err_fake = F.binary_cross_entropy(F.sigmoid(output), label)
+            c_err_fake = DC_LS(output, label, gan_name)
             c_err_fake.backward()
             c_err = c_err_real + c_err_fake
         c_z_1 = output.data.mean()
@@ -165,7 +172,7 @@ def train(generator, critic, g_opt, c_opt, gan_name, n_epochs=args.n_epochs):
             g_err = output.mean(0).view(1)
             g_err.backward(one)
         else:
-            g_err = F.binary_cross_entropy(F.sigmoid(output), label)
+            g_err = DC_LS(output, label, gan_name)
             g_err.backward()
         c_z_2 = output.data.mean()
         g_opt.step()
@@ -214,7 +221,8 @@ def main():
     model_path = "{}/models.pkl".format(output_path)
     if os.path.exists(model_path) and args.load:
         model = torch.load(model_path)
-        generator = model["generator"]
+        generator = model["gene" \
+                          "rator"]
         critic = model["critic"]
     else:
         generator = Generator()
@@ -224,8 +232,12 @@ def main():
     if cuda:
         generator.cuda()
         critic.cuda()
-    g_opt = optim.Adam(generator.parameters(), lr=args.g_lr, betas=(0.5, 0.999))
-    c_opt = optim.Adam(critic.parameters(), lr=args.c_lr, betas=(0.5, 0.999))
+    if args.type == "WGAN":
+        g_opt = optim.RMSprop(generator.parameters(), lr=args.g_lr)
+        c_opt = optim.RMSprop(generator.parameters(), lr=args.c_lr)
+    else:
+        g_opt = optim.Adam(generator.parameters(), lr=args.g_lr, betas=(0.5, 0.999), weight_decay=0.001)
+        c_opt = optim.Adam(critic.parameters(), lr=args.c_lr, betas=(0.5, 0.999), weight_decay=0.001)
     g_err, c_err = train(generator, critic, g_opt, c_opt, args.type)
     plot(g_err, c_err)
     torch.save({"generator": generator,
