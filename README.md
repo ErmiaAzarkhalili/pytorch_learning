@@ -6,5 +6,4 @@ some simple Pytorch scripts
 * `rnn_text_gen.py`,`lstm_text_gen.py` simple text generator using gru and lstm respectively.
 * `lstm_text_gen_ja.py` simple Japanese text generator using lstm and embedding layer.
 * `attention_model_translation.py` character-level seq2seq translation.
-* `gan32.py`, `gan64.py` you can choose DCGAN or WGAN by `-type` argument.
-* `eve.py` implementation of eve optimizer
+* `gan32.py`, `gan64.py` you can choose DCGAN, WGAN or LSGAN with `-type` argument.
